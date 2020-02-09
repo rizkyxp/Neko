@@ -82,10 +82,10 @@ class MainActivity : BaseActivity(), MangadexLoginDialog.Listener {
                         }
                     }
                     R.id.nav_drawer_downloads -> {
-                        router.pushController(DownloadController().withFadeTransaction())
+                        setRoot(DownloadController(), id)
                     }
                     R.id.nav_drawer_settings -> {
-                        router.pushController(SettingsMainController().withFadeTransaction())
+                        setRoot(SettingsMainController(), id)
                     }
                 }
             }

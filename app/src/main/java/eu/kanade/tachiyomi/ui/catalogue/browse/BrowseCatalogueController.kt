@@ -105,7 +105,7 @@ open class BrowseCatalogueController(bundle: Bundle) :
     }
 
     override fun getTitle(): String? {
-        return presenter.source.name
+        return resources?.getString(R.string.label_explore)
     }
 
     override fun createPresenter(): BrowseCataloguePresenter {

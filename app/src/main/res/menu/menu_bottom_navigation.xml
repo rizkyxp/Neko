@@ -6,7 +6,7 @@
         android:title="@string/label_library" />
     <item
         android:id="@+id/nav_drawer_browse"
-        android:title="@string/label_browse" />
+        android:title="@string/label_explore" />
 
     <item
         android:id="@+id/nav_drawer_downloads"
