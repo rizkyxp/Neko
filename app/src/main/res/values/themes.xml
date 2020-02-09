@@ -9,10 +9,12 @@
     <!--==============-->
     <!-- Light Themes -->
     <!--=======-======-->
-    <style name="Theme.Base" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.Base" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccentLight</item>
+        <item name="colorSecondary">@color/md_white_1000</item>
+        <item name="colorSurface">@color/md_white_1000</item>
         <item name="android:textColorPrimary">@color/textColorPrimaryLight</item>
         <item name="android:textColorSecondary">@color/textColorSecondaryLight</item>
         <item name="android:textColorHint">@color/textColorHintLight</item>
