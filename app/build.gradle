@@ -5,9 +5,6 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 apply plugin: 'kotlinx-serialization'
-apply plugin: 'com.github.zellius.shortcut-helper'
-
-shortcutHelper.filePath = './shortcuts.xml'
 
 ext {
     // Git is needed in your system PATH for these commands to work.

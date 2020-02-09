@@ -4,7 +4,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
-import android.app.Dialog
 import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -14,7 +13,6 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Build
-import android.os.Bundle
 import android.view.*
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
@@ -26,10 +24,7 @@ import androidx.transition.ChangeBounds
 import androidx.transition.ChangeImageTransform
 import androidx.transition.TransitionManager
 import androidx.transition.TransitionSet
-import com.afollestad.materialdialogs.MaterialDialog
-import com.afollestad.materialdialogs.list.listItemsSingleChoice
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.jakewharton.rxbinding.support.v4.widget.refreshes
@@ -48,19 +43,15 @@ import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.ui.base.controller.DialogController
 import eu.kanade.tachiyomi.ui.base.controller.NucleusController
 import eu.kanade.tachiyomi.ui.library.ChangeMangaCategoriesDialog
 import eu.kanade.tachiyomi.ui.library.LibraryController
-import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaController
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
 import eu.kanade.tachiyomi.util.getUriCompat
 import eu.kanade.tachiyomi.util.snack
 import eu.kanade.tachiyomi.util.toast
 import eu.kanade.tachiyomi.util.truncateCenter
-import jp.wasabeef.glide.transformations.CropSquareTransformation
-import jp.wasabeef.glide.transformations.MaskTransformation
 import kotlinx.android.synthetic.main.main_activity.*
 import kotlinx.android.synthetic.main.manga_info_controller.*
 import timber.log.Timber
@@ -180,7 +171,6 @@ class MangaInfoController : NucleusController<MangaInfoPresenter>(),
         when (item.itemId) {
             R.id.action_open_in_web_view -> openInWebView()
             R.id.action_share -> prepareToShareManga()
-            R.id.action_add_to_home_screen -> addToHomeScreen()
         }
         return super.onOptionsItemSelected(item)
     }
@@ -537,79 +527,6 @@ class MangaInfoController : NucleusController<MangaInfoPresenter>(),
     }
 
     /**
-     * Add a shortcut of the manga to the home screen
-     */
-    private fun addToHomeScreen() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // TODO are transformations really unsupported or is it just the Pixel Launcher?
-            createShortcutForShape()
-        } else {
-            ChooseShapeDialog(this).showDialog(router)
-        }
-    }
-
-    /**
-     * Dialog to choose a shape for the icon.
-     */
-    private class ChooseShapeDialog(bundle: Bundle? = null) : DialogController(bundle) {
-
-        constructor(target: MangaInfoController) : this() {
-            targetController = target
-        }
-
-        override fun onCreateDialog(savedViewState: Bundle?): Dialog {
-            val modes = intArrayOf(R.string.circular_icon,
-                    R.string.rounded_icon,
-                    R.string.square_icon,
-                    R.string.star_icon)
-
-            return MaterialDialog(activity!!)
-                    .title(R.string.icon_shape)
-                    .negativeButton(android.R.string.cancel)
-                    .listItemsSingleChoice (
-                        items = modes.map { activity?.getString(it) as CharSequence },
-                        waitForPositiveButton = false)
-                    { _, i, _ ->
-                        (targetController as? MangaInfoController)?.createShortcutForShape(i)
-                        dismissDialog()
-                    }
-        }
-    }
-
-    /**
-     * Retrieves the bitmap of the shortcut with the requested shape and calls [createShortcut] when
-     * the resource is available.
-     *
-     * @param i The shape index to apply. Defaults to circle crop transformation.
-     */
-    private fun createShortcutForShape(i: Int = 0) {
-        if (activity == null) return
-        GlideApp.with(activity!!)
-                .asBitmap()
-                .load(presenter.manga)
-                .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .apply {
-                    when (i) {
-                        0 -> circleCrop()
-                        1 -> transform(RoundedCorners(5))
-                        2 -> transform(CropSquareTransformation())
-                        3 -> centerCrop().transform(MaskTransformation(R.drawable.mask_star))
-                    }
-                }
-                .into(object : CustomTarget<Bitmap>(96, 96) {
-                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                        createShortcut(resource)
-                    }
-
-                    override fun onLoadCleared(placeholder: Drawable?) {}
-
-                    override fun onLoadFailed(errorDrawable: Drawable?) {
-                        activity?.toast(R.string.icon_creation_fail)
-                    }
-                })
-    }
-
-    /**
      * Copies a string to clipboard
      *
      * @param label Label to show to the user describing the content
@@ -653,7 +570,6 @@ class MangaInfoController : NucleusController<MangaInfoPresenter>(),
 
         // Create the shortcut intent.
         val shortcutIntent = activity.intent
-                .setAction(MainActivity.SHORTCUT_MANGA)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 .putExtra(MangaController.MANGA_EXTRA,
                         mangaControllerArgs.getLong(MangaController.MANGA_EXTRA))

@@ -108,10 +108,6 @@
     <!-- content description -->
     <string name="content_description_tracker_logo">logo</string>
 
-    <!-- Shortcuts-->
-    <string name="app_not_available">Application not available</string>
-    <string name="short_recent_updates">Updates</string>
-
     <!-- Preferences -->
     <!-- Subsections -->
     <string name="pref_category_general">General</string>
@@ -407,18 +403,8 @@
     <string name="follows_dropped">Dropped</string>
     <string name="follows_re_reading">Re Reading</string>
 
-    <string name="circular_icon">Circular icon</string>
-    <string name="rounded_icon">Rounded icon</string>
-    <string name="square_icon">Square icon</string>
-    <string name="star_icon">Star icon</string>
-    <string name="shortcut_title">Shortcut title</string>
-    <string name="shortcut_created">Shortcut was added to home screen.</string>
-    <string name="icon_shape">Icon shape</string>
-    <string name="icon_creation_fail">Failed to create shortcut!</string>
     <string name="delete_downloads_for_manga">Delete downloaded chapters?</string>
     <string name="copied_to_clipboard">%1$s copied to clipboard</string>
-    <string name="source_not_installed">Source not installed: %1$s</string>
-
     <!-- Manga chapters fragment -->
     <string name="manga_chapters_tab">Chapters</string>
     <string name="manga_chapter_no_title">No title</string>

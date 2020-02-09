@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:checked="true"
+        android:id="@+id/nav_drawer_library"
+        android:title="@string/label_library" />
+    <item
+        android:id="@+id/nav_drawer_browse"
+        android:title="@string/label_browse" />
+
+    <item
+        android:id="@+id/nav_drawer_downloads"
+        android:title="@string/label_download_queue"
+        android:checkable="false" />
+
+    <item
+        android:id="@+id/nav_drawer_settings"
+        android:title="@string/label_settings"
+        android:checkable="false" />
+</menu>

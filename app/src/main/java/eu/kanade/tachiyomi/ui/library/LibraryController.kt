@@ -361,7 +361,7 @@ class LibraryController(
         when (item.itemId) {
             R.id.action_search -> expandActionViewFromInteraction = true
             R.id.action_filter -> {
-                navView?.let { activity?.drawer?.openDrawer(Gravity.RIGHT) }
+                // navView?.let { activity?.drawer?.openDrawer(Gravity.RIGHT) }
             }
             R.id.action_update_library -> {
                 activity?.let { LibraryUpdateService.start(it) }
@@ -486,7 +486,7 @@ class LibraryController(
         presenter.removeMangaFromLibrary(mangas, deleteChapters)
         destroyActionModeIfNeeded()
     }
-    
+
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_IMAGE_OPEN) {

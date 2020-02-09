@@ -55,7 +55,6 @@ class NotificationReceiver : BroadcastReceiver() {
             // Clear the download queue
             ACTION_CLEAR_DOWNLOADS -> downloadManager.clearQueue(true)
             // Show message notification created
-            ACTION_SHORTCUT_CREATED -> context.toast(R.string.shortcut_created)
             // Launch share activity and dismiss notification
             ACTION_SHARE_IMAGE -> shareImage(context, intent.getStringExtra(EXTRA_FILE_LOCATION),
                     intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1))
@@ -366,7 +365,7 @@ class NotificationReceiver : BroadcastReceiver() {
         internal fun openChapterPendingActivity(context: Context, manga: Manga, groupId: Int):
                 PendingIntent {
             val newIntent =
-                    Intent(context, MainActivity::class.java).setAction(MainActivity.SHORTCUT_MANGA)
+                    Intent(context, MainActivity::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                             .putExtra(MangaController.MANGA_EXTRA, manga.id)
                             .putExtra("notificationId", manga.id.hashCode())
