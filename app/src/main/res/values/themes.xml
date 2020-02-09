@@ -21,7 +21,6 @@
         <item name="android:textColorPrimaryInverse">@color/textColorPrimaryDark</item>
         <item name="android:textColorSecondaryInverse">@color/textColorSecondaryDark</item>
         <item name="android:textColorHintInverse">@color/textColorHintDark</item>
-        <item name="android:colorBackground">@color/backgroundLight</item>
         <item name="android:listSelector">?colorAccent</item>
         <item name="android:divider">@color/dividerLight</item>
         <item name="android:listDivider">@drawable/line_divider_light</item>
