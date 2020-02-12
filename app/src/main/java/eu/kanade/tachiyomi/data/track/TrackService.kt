@@ -6,9 +6,6 @@ import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import eu.kanade.tachiyomi.network.NetworkHelper
-import okhttp3.OkHttpClient
-import rx.Completable
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 abstract class TrackService(val id: Int) {
@@ -16,8 +13,7 @@ abstract class TrackService(val id: Int) {
     val preferences: PreferencesHelper by injectLazy()
     val networkService: NetworkHelper by injectLazy()
 
-    open val client: OkHttpClient
-        get() = networkService.client
+    open val client = networkService.client
 
     // Name of the manga sync service to display
     abstract val name: String
@@ -39,17 +35,17 @@ abstract class TrackService(val id: Int) {
 
     open fun displayScore(track: Track): String = throw Exception("Not used")
 
-    open fun add(track: Track): Observable<Track> = throw Exception("Not used")
+    open suspend fun add(track: Track): Track = throw Exception("Not used")
 
-    open fun update(track: Track): Observable<Track> = throw Exception("Not used")
+    open suspend fun update(track: Track): Track = throw Exception("Not used")
 
-    open fun bind(track: Track): Observable<Track> = throw Exception("Not used")
+    open suspend fun bind(track: Track): Track = throw Exception("Not used")
 
-    open fun search(query: String): Observable<List<TrackSearch>> = throw Exception("Not used")
+    open suspend fun search(query: String): List<TrackSearch> = throw Exception("Not used")
 
-    open fun refresh(track: Track): Observable<Track> = throw Exception("Not used")
+    open suspend fun refresh(track: Track): Track = throw Exception("Not used")
 
-    open fun login(username: String, password: String): Completable = throw Exception("Not used")
+    open suspend fun login(username: String, password: String): Boolean = throw Exception("Not used")
 
     open fun isTracker() = true
 

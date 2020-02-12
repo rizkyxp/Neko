@@ -6,13 +6,12 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import rx.Observable
 import java.util.*
 
 
@@ -22,7 +21,7 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
     private val jsonMime = "application/json; charset=utf-8".toMediaTypeOrNull()
     private val authClient = client.newBuilder().addInterceptor(interceptor).build()
 
-    fun addLibManga(track: Track): Observable<Track> {
+    suspend fun addLibManga(track: Track): Track {
         val query = """
             |mutation AddManga(${'$'}mangaId: Int, ${'$'}progress: Int, ${'$'}status: MediaListStatus) {
                 |SaveMediaListEntry (mediaId: ${'$'}mangaId, progress: ${'$'}progress, status: ${'$'}status) { 
@@ -45,21 +44,21 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .url(apiUrl)
                 .post(body)
                 .build()
-        return authClient.newCall(request)
-                .asObservableSuccess()
-                .map { netResponse ->
-                    val responseBody = netResponse.body?.string().orEmpty()
-                    netResponse.close()
-                    if (responseBody.isEmpty()) {
-                        throw Exception("Null Response")
-                    }
-                    val response = parser.parse(responseBody).obj
-                    track.library_id = response["data"]["SaveMediaListEntry"]["id"].asLong
-                    track
-                }
+        val netResponse = authClient.newCall(request).await()
+
+        val responseBody = netResponse.body?.string().orEmpty()
+        netResponse.close()
+        if (responseBody.isEmpty()) {
+            throw Exception("Null Response")
+        }
+        val response = parser.parse(responseBody).obj
+        track.library_id = response["data"]["SaveMediaListEntry"]["id"].asLong
+
+        return track
+
     }
 
-    fun updateLibManga(track: Track): Observable<Track> {
+    suspend fun updateLibManga(track: Track): Track {
         val query = """
             |mutation UpdateManga(${'$'}listId: Int, ${'$'}progress: Int, ${'$'}status: MediaListStatus, ${'$'}score: Int) {
                 |SaveMediaListEntry (id: ${'$'}listId, progress: ${'$'}progress, status: ${'$'}status, scoreRaw: ${'$'}score) {
@@ -84,14 +83,11 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .url(apiUrl)
                 .post(body)
                 .build()
-        return authClient.newCall(request)
-                .asObservableSuccess()
-                .map {
-                    track
-                }
+        authClient.newCall(request).execute()
+        return track
     }
 
-    fun search(search: String): Observable<List<TrackSearch>> {
+    suspend fun search(search: String): List<TrackSearch> {
         val query = """
             |query Search(${'$'}query: String) {
                 |Page (perPage: 50) {
@@ -128,24 +124,21 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .url(apiUrl)
                 .post(body)
                 .build()
-        return authClient.newCall(request)
-                .asObservableSuccess()
-                .map { netResponse ->
-                    val responseBody = netResponse.body?.string().orEmpty()
-                    if (responseBody.isEmpty()) {
-                        throw Exception("Null Response")
-                    }
-                    val response = parser.parse(responseBody).obj
-                    val data = response["data"]!!.obj
-                    val page = data["Page"].obj
-                    val media = page["media"].array
-                    val entries = media.map { jsonToALManga(it.obj) }
-                    entries.map { it.toTrack() }
-                }
+        val netResponse = authClient.newCall(request).await()
+        val responseBody = netResponse.body?.string().orEmpty()
+        if (responseBody.isEmpty()) {
+            throw Exception("Null Response")
+        }
+        val response = parser.parse(responseBody).obj
+        val data = response["data"]!!.obj
+        val page = data["Page"].obj
+        val media = page["media"].array
+        val entries = media.map { jsonToALManga(it.obj) }
+        return entries.map { it.toTrack() }
     }
 
 
-    fun findLibManga(track: Track, userid: Int): Observable<Track?> {
+    suspend fun findLibManga(track: Track, userid: Int): Track? {
         val query = """
             |query (${'$'}id: Int!, ${'$'}manga_id: Int!) {
                 |Page {
@@ -189,33 +182,35 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .url(apiUrl)
                 .post(body)
                 .build()
-        return authClient.newCall(request)
-                .asObservableSuccess()
-                .map { netResponse ->
-                    val responseBody = netResponse.body?.string().orEmpty()
-                    if (responseBody.isEmpty()) {
-                        throw Exception("Null Response")
-                    }
-                    val response = parser.parse(responseBody).obj
-                    val data = response["data"]!!.obj
-                    val page = data["Page"].obj
-                    val media = page["mediaList"].array
-                    val entries = media.map { jsonToALUserManga(it.obj) }
-                    entries.firstOrNull()?.toTrack()
-
-                }
+        val result = authClient.newCall(request).await()
+        return result.let { resp ->
+            val responseBody = resp.body?.string().orEmpty()
+            if (responseBody.isEmpty()) {
+                throw Exception("Null Response")
+            }
+            val response = parser.parse(responseBody).obj
+            val data = response["data"]!!.obj
+            val page = data["Page"].obj
+            val media = page["mediaList"].array
+            val entries = media.map { jsonToALUserManga(it.obj) }
+            entries.firstOrNull()?.toTrack()
+        }
     }
 
-    fun getLibManga(track: Track, userid: Int): Observable<Track> {
-        return findLibManga(track, userid)
-                .map { it ?: throw Exception("Could not find manga") }
+    suspend fun getLibManga(track: Track, userid: Int): Track {
+        val track = findLibManga(track, userid)
+        if (track == null) {
+            throw Exception("Could not find manga")
+        } else {
+            return track
+        }
     }
 
     fun createOAuth(token: String): OAuth {
         return OAuth(token, "Bearer", System.currentTimeMillis() + 31536000000, 31536000000)
     }
 
-    fun getCurrentUser(): Observable<Pair<Int, String>> {
+    suspend fun getCurrentUser(): Pair<Int, String> {
         val query = """
             |query User {
                 |Viewer {
@@ -234,18 +229,16 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .url(apiUrl)
                 .post(body)
                 .build()
-        return authClient.newCall(request)
-                .asObservableSuccess()
-                .map { netResponse ->
-                    val responseBody = netResponse.body?.string().orEmpty()
-                    if (responseBody.isEmpty()) {
-                        throw Exception("Null Response")
-                    }
-                    val response = parser.parse(responseBody).obj
-                    val data = response["data"]!!.obj
-                    val viewer = data["Viewer"].obj
-                    Pair(viewer["id"].asInt, viewer["mediaListOptions"]["scoreFormat"].asString)
-                }
+        val netResponse = authClient.newCall(request).await()
+
+        val responseBody = netResponse.body?.string().orEmpty()
+        if (responseBody.isEmpty()) {
+            throw Exception("Null Response")
+        }
+        val response = parser.parse(responseBody).obj
+        val data = response["data"]!!.obj
+        val viewer = data["Viewer"].obj
+        return Pair(viewer["id"].asInt, viewer["mediaListOptions"]["scoreFormat"].asString)
     }
 
     private fun jsonToALManga(struct: JsonObject): ALManga {

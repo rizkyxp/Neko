@@ -15,10 +15,7 @@ import eu.kanade.tachiyomi.source.online.utils.FollowStatus
 import eu.kanade.tachiyomi.source.online.utils.MdUtil
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter
 import kotlinx.coroutines.*
-import rx.Observable
 import rx.Subscription
-import rx.android.schedulers.AndroidSchedulers
-import rx.schedulers.Schedulers
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -36,110 +33,93 @@ class TrackPresenter(
 
     private val mdex by lazy { Injekt.get<SourceManager>().getMangadex() as HttpSource }
 
-    private var trackSubscription: Subscription? = null
-
     private var searchSubscription: Subscription? = null
 
-    private var refreshSubscription: Subscription? = null
+    private var refreshExceptionHandler = CoroutineExceptionHandler { _, error -> GlobalScope.launch(Dispatchers.Main) { view?.onRefreshError(error) } }
 
-    private var exceptionHandler = CoroutineExceptionHandler { _, error -> GlobalScope.launch(Dispatchers.Main) { view?.onRefreshError(error) } }
+    private var searchExceptionHandler = CoroutineExceptionHandler { _, error -> GlobalScope.launch(Dispatchers.Main) { view?.onSearchResultsError(error) } }
+
 
     override fun onCreate(savedState: Bundle?) {
         super.onCreate(savedState)
-        job = Job()
-        job = launch(exceptionHandler)
-        { registerMdList(manga) }
+        fetchTrackings()
     }
 
     fun fetchTrackings() {
-        trackSubscription?.let { remove(it) }
-        trackSubscription = db.getTracks(manga)
-                .asRxObservable()
-                .map { tracks ->
-                    validServices.map { service ->
-                        TrackItem(tracks.find { it.sync_id == service.id }, service)
-                    }
+        job = Job()
+        job = launch(refreshExceptionHandler) {
+            withContext(Dispatchers.IO) {
+                registerMdList(manga)
+                trackList = db.getTracks(manga).executeAsBlocking().map { track ->
+                    TrackItem(track, validServices.find { it.id == track.sync_id }!!)
                 }
-                .observeOn(AndroidSchedulers.mainThread())
-                .doOnNext { trackList = it }
-                .subscribeLatestCache(TrackController::onNextTrackings)
+            }
+            withContext(Dispatchers.Main)
+            {
+                view?.onNextTrackings(trackList)
+            }
+        }
     }
 
     fun refresh() {
         job = Job()
-        job = launch(exceptionHandler)
-        {
-            refreshMdList(trackList[0].track!!)
+        job = launch(refreshExceptionHandler) {
+            withContext(Dispatchers.IO) {
+                refreshMdList(trackList.find { it.service.isMdList() }!!.track!!)
 
+                trackList.filter { it.track != null && !it.service.isExternalLink() && !it.service.isMdList() }
+                        .forEach { item ->
+                            val refreshed = item.service.refresh(item.track!!)
+                            db.insertTrack(refreshed).executeAsBlocking()
+                        }
+            }
+            withContext(Dispatchers.Main)
+            {
+                view?.onRefreshDone()
+            }
         }
-
-    }
-
-    private fun refreshOthers() {
-        refreshSubscription?.let { remove(it) }
-
-        refreshSubscription = Observable.from(trackList)
-                .filter { it.track != null && !it.service.isExternalLink() && !it.service.isMdList() }
-                .concatMap { item ->
-                    item.service.refresh(item.track!!)
-                            .flatMap { db.insertTrack(it).asRxObservable() }
-                            .map { item }
-                            .onErrorReturn { item }
-                }
-                .toList()
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribeFirst({ view, _ -> view.onRefreshDone() },
-                        TrackController::onRefreshError)
     }
 
     private suspend fun refreshMdList(track: Track) {
-        withContext(Dispatchers.IO) {
-            val remoteTrack = mdex.fetchTrackingInfo(manga)
-            track.copyPersonalFrom(remoteTrack)
-            track.total_chapters = remoteTrack.total_chapters
-            db.insertTrack(track).executeAsBlocking()
-        }
-        withContext(Dispatchers.Main)
-        {
-            refreshOthers()
-        }
+        val remoteTrack = mdex.fetchTrackingInfo(manga)
+        track.copyPersonalFrom(remoteTrack)
+        track.total_chapters = remoteTrack.total_chapters
+        db.insertTrack(track).executeAsBlocking()
     }
 
     fun search(query: String, service: TrackService) {
-        searchSubscription?.let { remove(it) }
-        searchSubscription = service.search(query)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribeLatestCache(TrackController::onSearchResults,
-                        TrackController::onSearchResultsError)
+        job = Job()
+        job = launch(searchExceptionHandler) {
+
+            val search = withContext(Dispatchers.IO) {
+                service.search(query)
+            }
+            withContext(Dispatchers.Main) {
+                view?.onSearchResults(search)
+            }
+        }
     }
 
     private suspend fun registerMdList(manga: Manga) {
-        withContext(Dispatchers.IO) {
-            validServices = trackManager.services.filter { it.isLogged || it.isExternalLink() }
-            val tracksInDb = db.getTracks(manga).executeAsBlocking()
+        validServices = trackManager.services.filter { it.isLogged || it.isExternalLink() }
+        val tracksInDb = db.getTracks(manga).executeAsBlocking()
 
-            val mdTrackCount = tracksInDb.filter { it.sync_id == TrackManager.MDLIST }.count()
-            if (mdTrackCount == 0) {
-                val track = mdex.fetchTrackingInfo(manga)
-                track.manga_id = manga.id!!
-                db.insertTrack(track).executeAsBlocking()
-            }
-
-            if (manga.anime_planet_id == null) {
-                validServices = validServices.filter { it.id != TrackManager.ANIMEPLANET }
-            } else {
-                registerExternal(TrackManager.ANIMEPLANET, tracksInDb, AnimePlanet.URL, manga.anime_planet_id!!)
-            }
-            if (manga.manga_updates_id == null) {
-                validServices = validServices.filter { it.id != TrackManager.MANGAUPDATES }
-            } else {
-                registerExternal(TrackManager.MANGAUPDATES, tracksInDb, MangaUpdates.URL, manga.manga_updates_id!!)
-            }
+        val mdTrackCount = tracksInDb.filter { it.sync_id == TrackManager.MDLIST }.count()
+        if (mdTrackCount == 0) {
+            val track = mdex.fetchTrackingInfo(manga)
+            track.manga_id = manga.id!!
+            db.insertTrack(track).executeAsBlocking()
         }
-        withContext(Dispatchers.Main) {
-            fetchTrackings()
+
+        if (manga.anime_planet_id == null) {
+            validServices = validServices.filter { it.id != TrackManager.ANIMEPLANET }
+        } else {
+            registerExternal(TrackManager.ANIMEPLANET, tracksInDb, AnimePlanet.URL, manga.anime_planet_id!!)
+        }
+        if (manga.manga_updates_id == null) {
+            validServices = validServices.filter { it.id != TrackManager.MANGAUPDATES }
+        } else {
+            registerExternal(TrackManager.MANGAUPDATES, tracksInDb, MangaUpdates.URL, manga.manga_updates_id!!)
         }
     }
 
@@ -155,36 +135,38 @@ class TrackPresenter(
     }
 
     fun registerTracking(item: Track?, service: TrackService) {
-        if (item != null) {
-            item.manga_id = manga.id!!
-            add(service.bind(item)
-                    .flatMap { db.insertTrack(item).asRxObservable() }
-                    .subscribeOn(Schedulers.io())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribeFirst({ view, _ -> view.onRefreshDone() },
-                            TrackController::onRefreshError))
-        } else {
-            db.deleteTrackForManga(manga, service).executeAsBlocking()
-            view?.onRefreshDone()
+        job = Job()
+        job = launch(refreshExceptionHandler) {
+            withContext(Dispatchers.IO) {
+                if (item != null) {
+                    val track = service.bind(item)
+                    db.insertTrack(track).executeAsBlocking()
+                } else {
+                    db.deleteTrackForManga(manga, service).executeAsBlocking()
+                }
+
+            }
+            withContext(Dispatchers.Main) {
+                view?.onRefreshDone()
+            }
         }
     }
 
     private fun updateRemote(track: Track, service: TrackService) {
-        if (service.isMdList()) {
-            job = Job()
-            job = launch(exceptionHandler) { updateMdList(track) }
-        } else if (!service.isExternalLink()) {
-            service.update(track)
-                    .flatMap { db.insertTrack(track).asRxObservable() }
-                    .subscribeOn(Schedulers.io())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribeFirst({ view, _ -> view.onRefreshDone() },
-                            { view, error ->
-                                view.onRefreshError(error)
-
-                                // Restart on error to set old values
-                                fetchTrackings()
-                            })
+        job = Job()
+        job = launch(refreshExceptionHandler) {
+            withContext(Dispatchers.IO) {
+                if (service.isMdList()) {
+                    updateMdList(track)
+                } else if (!service.isExternalLink()) {
+                    val newTrack = service.update(track)
+                    db.insertTrack(newTrack).executeAsBlocking()
+                }
+            }
+            withContext(Dispatchers.Main) {
+                view?.onRefreshDone()
+                fetchTrackings()
+            }
         }
     }
 
@@ -192,27 +174,21 @@ class TrackPresenter(
      * This updates MDList Tracker
      */
     private suspend fun updateMdList(track: Track) {
-        withContext(Dispatchers.IO) {
-            val followStatus = FollowStatus.fromInt(track.status)!!
+        val followStatus = FollowStatus.fromInt(track.status)!!
 
-            //allow follow status to update
-            if (manga.follow_status != followStatus) {
-                mdex.updateFollowStatus(MdUtil.getMangaId(track.tracking_url), followStatus)
-                manga.follow_status = followStatus
-                db.insertManga(manga).executeAsBlocking()
-            }
+        //allow follow status to update
+        if (manga.follow_status != followStatus) {
+            mdex.updateFollowStatus(MdUtil.getMangaId(track.tracking_url), followStatus)
+            manga.follow_status = followStatus
+            db.insertManga(manga).executeAsBlocking()
+        }
 
-            //mangadex wont update chapters if manga is not follows this prevents unneeded network call
-            if (followStatus != FollowStatus.UNFOLLOWED) {
-                mdex.updateReadingProgress(track)
-            }
-            // insert the changes into tracking db
-            db.insertTrack(track).executeAsBlocking()
+        //mangadex wont update chapters if manga is not follows this prevents unneeded network call
+        if (followStatus != FollowStatus.UNFOLLOWED) {
+            mdex.updateReadingProgress(track)
         }
-        withContext(Dispatchers.Main) {
-            view?.onRefreshDone()
-            fetchTrackings()
-        }
+        // insert the changes into tracking db
+        db.insertTrack(track).executeAsBlocking()
     }
 
     fun setStatus(item: TrackItem, index: Int) {

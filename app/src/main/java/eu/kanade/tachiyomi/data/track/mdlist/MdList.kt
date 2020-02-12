@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.data.track.TrackService
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.utils.FollowStatus
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -39,18 +38,16 @@ class MdList(private val context: Context, id: Int) : TrackService(id) {
 
     override fun displayScore(track: Track) = track.score.toInt().toString()
 
-    
-    override fun update(track: Track): Observable<Track> {
+
+    override suspend fun update(track: Track): Track {
         if (track.total_chapters != 0 && track.last_chapter_read == track.total_chapters) {
             track.status = FollowStatus.COMPLETED.int
         }
-
-        return Observable.just(track)
-        //return api.updateLibManga(track)
+        return track
     }
 
 
-    override fun login(username: String, password: String) = throw Exception("not used")
+    override suspend fun login(username: String, password: String) = throw Exception("not used")
 
     @SuppressLint("MissingSuperCall")
     override fun logout() = throw Exception("not used")
